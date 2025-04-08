@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useState, useEffect } from 'react';
+import { ChangeEvent, FormEvent, useState } from 'react';
 import { useDispatch } from 'react-redux';
 import { setUser } from '../../slice/authSlice';
 import { IUserSignup } from '../../interfaces/customer/IUserSignup';
@@ -13,7 +13,7 @@ interface IUserLogin {
 }
 
 function CustomerAuth() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
   const dispatch = useDispatch();
   const [isSignUp, setIsSignUp] = useState(true);
   const [signupData, setSignupData] = useState<IUserSignup>({
@@ -28,7 +28,7 @@ function CustomerAuth() {
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState('');
   
-  // OTP related states
+
   const [showOtpModal, setShowOtpModal] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '']);
   const [otpEmail, setOtpEmail] = useState('');
@@ -36,18 +36,23 @@ function CustomerAuth() {
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendDisabled, setResendDisabled] = useState(false);
   const [countdown, setCountdown] = useState(30);
-  const [pendingAuthData, setPendingAuthData] = useState<any>(null); // Store pending auth data during OTP verification
+  const [pendingAuthData, setPendingAuthData] = useState<any>(null);
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (resendDisabled && countdown > 0) {
-      timer = setTimeout(() => setCountdown(countdown - 1), 1000);
-    } else if (countdown === 0) {
-      setResendDisabled(false);
-      setCountdown(30);
-    }
-    return () => clearTimeout(timer);
-  }, [resendDisabled, countdown]);
+  // Handle countdown for OTP resend
+  const startResendCountdown = () => {
+    setResendDisabled(true);
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setResendDisabled(false);
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  };
 
   const handleSignupChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -67,21 +72,20 @@ function CustomerAuth() {
     setFormError('');
   
     try {
-
+      // Send OTP for signup verification
       const response = await api.post('/users/send-otp', {
         email: signupData.email,
         action: 'signup'
       });
       
       setOtpEmail(signupData.email);
-      
-
       setPendingAuthData({
         action: 'signup',
         data: signupData
       });
       
       setShowOtpModal(true);
+      startResendCountdown();
     }
     catch (error: any) {
       console.error("OTP request failed:", error);
@@ -98,37 +102,34 @@ function CustomerAuth() {
   
     try {
 
-      const response = await api.post('/users/send-otp', {
-        email: loginData.email,
-        action: '/login'
-      });
-      
-      setOtpEmail(loginData.email);
-      
-      setPendingAuthData({
-        action: '/login',
-        data: loginData
-      });
-      
-      setShowOtpModal(true);
+      const response = await api.post('/users/login', loginData);
+
+      console.log('response.data', response.data);
+
+      dispatch(setUser({
+        email: response.data.email,
+        role: response.data.role,
+        token: response.data.token,
+      }));
+      navigate('/');
     }
     catch (error: any) {
-      console.error("OTP request failed:", error);
-      setFormError(error.response?.data?.message || "Failed to send verification code. Please try again.");
+      console.error("Login failed:", error);
+      setFormError(error.response?.data?.message || "Invalid email or password. Please try again.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleOtpChange = (index: number, value: string) => {
-
+    // Only allow digits
     if (value && !/^\d+$/.test(value)) return;
     
     const newOtp = [...otp];
     newOtp[index] = value;
     setOtp(newOtp);
     
-
+    // Auto-focus next input
     if (value && index < 3) {
       const nextInput = document.getElementById(`otp-${index + 1}`);
       if (nextInput) nextInput.focus();
@@ -143,45 +144,25 @@ function CustomerAuth() {
     const otpValue = otp.join('');
     
     try {
-      let endpoint, payload, responseData;
+      // Verify OTP for signup
+      const response = await api.post('/users/verify-otp', {
+        ...pendingAuthData.data, 
+        otp: otpValue
+      });
       
-      if (pendingAuthData?.action === 'signup') {
-
-        endpoint = '/users/verify-otp';
-        payload = {
-          ...pendingAuthData.data, 
-          otp: otpValue
-        };
-      } else {
-
-        endpoint = '/users/login';
-        payload = {
-          email: pendingAuthData.data.email,
-          password: pendingAuthData.data.password,
-          otp: otpValue
-        };
-      }
+      // Close OTP modal
+      setShowOtpModal(false);
       
-      const response = await api.post(endpoint, payload);
-      responseData = response.data;
-      
-      dispatch(setUser({
-        email: responseData.email,
-        role: responseData.role,
-        token: responseData.token,
-      }));
-      
-
-      if (pendingAuthData?.action === 'signup') {
-        setSignupData({ name: '', email: '', password: '' });
-      } else {
-        setLoginData({ email: '', password: '' });
-      }
-      
+      // Reset form data
+      setSignupData({ name: '', email: '', password: '' });
       setPendingAuthData(null);
       
-      setShowOtpModal(false);
-      navigate('/login');
+      // Switch to login form after successful signup
+      setIsSignUp(false);
+      
+      // Show success message (optional)
+      setFormError('');
+      
     } catch (error: any) {
       console.error("OTP verification failed:", error);
       setOtpError(error.response?.data?.message || 'Invalid OTP. Please try again.');
@@ -195,17 +176,19 @@ function CustomerAuth() {
     
     setResendDisabled(true);
     setOtpError('');
+    setCountdown(30);
     
     try {
       await api.post('/users/send-otp', { 
         email: otpEmail,
-        action: pendingAuthData?.action || 'signup'
+        action: 'signup'
       });
-
-      setOtpError(''); 
+      
+      startResendCountdown();
     } catch (error: any) {
       console.error("Failed to resend OTP:", error);
       setOtpError("Failed to resend verification code. Please try again later.");
+      setResendDisabled(false);
     }
   };
 
@@ -216,13 +199,8 @@ function CustomerAuth() {
     setPendingAuthData(null);
   };
 
-  const handleGoogleAuth = async () => {
-    console.log('Google authentication clicked');
-    // Implement OAuth logic
-  };
-
-  const handleAppleAuth = async () => {
-    console.log('Apple authentication clicked');
+  const handleSocialAuth = (provider: string) => {
+    console.log(`${provider} authentication clicked`);
     // Implement OAuth logic
   };
 
@@ -233,6 +211,7 @@ function CustomerAuth() {
   
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gray-50 overflow-hidden">
+      {/* Background image with overlay */}
       <div className="absolute inset-0 w-full h-full">
         <img 
           src={loginImage} 
@@ -242,7 +221,9 @@ function CustomerAuth() {
         <div className="absolute inset-0 bg-black bg-opacity-40"></div>
       </div>
 
+      {/* Main card */}
       <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col md:flex-row overflow-hidden">
+        {/* Left side - Branding */}
         <div 
           className="w-full md:w-2/5 p-8 flex flex-col justify-center items-center" 
           style={{ backgroundColor: '#51C8BC' }}
@@ -301,9 +282,9 @@ function CustomerAuth() {
             {isSignUp ? 'Create Your Account' : 'Welcome Back'}
           </h2>
 
-          {/* Display form errors */}
+          {/* Display success/error message */}
           {formError && (
-            <div className="bg-red-50 text-red-500 p-3 rounded-md mb-4 text-sm">
+            <div className={`p-3 rounded-md mb-4 text-sm ${formError.includes('success') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
               {formError}
             </div>
           )}
@@ -414,7 +395,7 @@ function CustomerAuth() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Processing...
+                    Signing In...
                   </span>
                 ) : (
                   'Sign In'
@@ -430,9 +411,10 @@ function CustomerAuth() {
             <div className="flex-grow border-t border-gray-300"></div>
           </div>
 
+          {/* Social Login Buttons */}
           <div className="flex flex-col space-y-4 mb-6">
             <button 
-              onClick={handleGoogleAuth}
+              onClick={() => handleSocialAuth('Google')}
               className="w-full flex items-center justify-center bg-white border border-gray-300 rounded-lg px-4 py-3 text-gray-700 font-medium hover:bg-gray-50 transition duration-300"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" className="mr-3">
@@ -445,7 +427,7 @@ function CustomerAuth() {
             </button>
             
             <button 
-              onClick={handleAppleAuth}
+              onClick={() => handleSocialAuth('Apple')}
               className="w-full flex items-center justify-center bg-black text-white border border-black rounded-lg px-4 py-3 font-medium hover:bg-gray-900 transition duration-300"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" className="mr-3" fill="white">
@@ -455,6 +437,7 @@ function CustomerAuth() {
             </button>
           </div>
 
+          {/* Toggle between signup and login */}
           <div className="text-center mt-4">
             <p className="text-sm text-gray-600 font-sans">
               {isSignUp ? 'Already have an account?' : "Don't have an account yet?"}{' '}
@@ -470,7 +453,7 @@ function CustomerAuth() {
         </div>
       </div>
 
-      {/* OTP Verification Modal */}
+      {/* OTP Verification Modal - Only for Signup */}
       {showOtpModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg w-full max-w-md mx-4 p-6 shadow-xl">
@@ -480,9 +463,9 @@ function CustomerAuth() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-1 font-sans">Verification Required</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-1 font-sans">Verify Your Email</h3>
               <p className="text-gray-600 font-sans">
-                We've sent a 4-digit code to <span className="font-medium">{otpEmail}</span>
+                Enter the 4-digit code sent to <span className="font-medium">{otpEmail}</span>
               </p>
             </div>
 
@@ -523,7 +506,7 @@ function CustomerAuth() {
                     Verifying...
                   </span>
                 ) : (
-                  'Verify Account'
+                  'Complete Signup'
                 )}
               </button>
             </form>
@@ -535,7 +518,7 @@ function CustomerAuth() {
               <button
                 onClick={handleResendOtp}
                 disabled={resendDisabled}
-                className="text-emerald-600 hover:text-emerald-800 font-medium text-sm font-sans"
+                className="text-emerald-600 hover:text-emerald-800 font-medium text-sm font-sans disabled:text-emerald-300"
               >
                 {resendDisabled ? `Resend in ${countdown}s` : 'Resend Code'}
               </button>
@@ -546,7 +529,7 @@ function CustomerAuth() {
                 onClick={closeOtpModal}
                 className="text-gray-500 hover:text-gray-700 font-medium text-sm font-sans"
               >
-                Try a different method
+                Cancel
               </button>
             </div>
           </div>
