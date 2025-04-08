@@ -4,7 +4,7 @@ import { setUser } from '../../slice/authSlice';
 import { IUserSignup } from '../../interfaces/customer/IUserSignup';
 import loginImage from '../../../public/customer/login/Sign In.png';
 import logicIcon from '../../../public/customer/login/4137516.webp';
-import { api } from '../../services/api';
+import {  apiUser } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -74,7 +74,7 @@ function CustomerAuth() {
   
     try {
       // Send OTP for signup verification
-      const response = await api.post('/users/send-otp', {
+      const response = await apiUser.post('/send-otp', {
         email: signupData.email,
         action: 'signup'
       });
@@ -115,7 +115,7 @@ function CustomerAuth() {
     setFormError('');
   
     try {
-      const response = await api.post('/users/login', loginData);
+      const response = await apiUser.post('/login', loginData);
 
       dispatch(setUser({
         email: response.data.email,
@@ -172,7 +172,7 @@ function CustomerAuth() {
     
     try {
       // Verify OTP for signup
-      const response = await api.post('/users/verify-otp', {
+      const response = await apiUser.post('/verify-otp', {
         ...pendingAuthData.data, 
         otp: otpValue
       });
@@ -215,7 +215,7 @@ function CustomerAuth() {
     setCountdown(30);
     
     try {
-      await api.post('/users/send-otp', { 
+      await apiUser.post('/send-otp', { 
         email: otpEmail,
         action: 'signup'
       });

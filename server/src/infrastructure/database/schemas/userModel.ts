@@ -12,6 +12,7 @@ const userSchema = new Schema<UserDoc>(
     email: { type: String, required: true, unique: true },
     phone: String,
     password: String,
+    image: { type: String, default: null },
     role: {
       type: String,
       enum: ['admin', 'customer', 'retailer', 'deliveryBoy'],

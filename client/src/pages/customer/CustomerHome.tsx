@@ -1,5 +1,6 @@
-import { RootState } from "@reduxjs/toolkit/query";
+
 import { useSelector } from "react-redux"
+import { RootState } from "../../app/store";
 
 
 function CustomerHome() {
