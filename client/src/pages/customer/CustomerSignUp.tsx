@@ -100,13 +100,13 @@ function CustomerAuth() {
 
       const response = await api.post('/users/send-otp', {
         email: loginData.email,
-        action: 'login'
+        action: '/login'
       });
       
       setOtpEmail(loginData.email);
       
       setPendingAuthData({
-        action: 'login',
+        action: '/login',
         data: loginData
       });
       
@@ -181,7 +181,7 @@ function CustomerAuth() {
       setPendingAuthData(null);
       
       setShowOtpModal(false);
-      navigate('/');
+      navigate('/login');
     } catch (error: any) {
       console.error("OTP verification failed:", error);
       setOtpError(error.response?.data?.message || 'Invalid OTP. Please try again.');
