@@ -5,8 +5,6 @@ import { User } from '../../../domain/entities/User';
 import { UserModel } from '../schemas/userModel';
 import { PasswordService } from '../../../domain/services/PasswordService';
 
-
-
 export class MongoUserRepository implements IUserRepository {
   async findByEmail(email: string): Promise<User | null> {
     return await UserModel.findOne({ email }) as User;

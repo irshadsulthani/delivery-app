@@ -6,6 +6,8 @@ import loginImage from '../../../public/customer/login/Sign In.png';
 import logicIcon from '../../../public/customer/login/4137516.webp';
 import { api } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface IUserLogin {
   email: string;
@@ -38,7 +40,6 @@ function CustomerAuth() {
   const [countdown, setCountdown] = useState(30);
   const [pendingAuthData, setPendingAuthData] = useState<any>(null);
 
-  // Handle countdown for OTP resend
   const startResendCountdown = () => {
     setResendDisabled(true);
     const timer = setInterval(() => {
@@ -77,6 +78,7 @@ function CustomerAuth() {
         email: signupData.email,
         action: 'signup'
       });
+      console.log('response',response);
       
       setOtpEmail(signupData.email);
       setPendingAuthData({
@@ -86,10 +88,22 @@ function CustomerAuth() {
       
       setShowOtpModal(true);
       startResendCountdown();
+      
+      // Show toast notification
+      toast.info("Verification code sent to your email!", {
+        position: "top-right",
+        autoClose: 5000
+      });
     }
     catch (error: any) {
       console.error("OTP request failed:", error);
       setFormError(error.response?.data?.message || "Failed to send verification code. Please try again.");
+      
+      // Show error toast
+      toast.error(error.response?.data?.message || "Failed to send verification code", {
+        position: "top-right",
+        autoClose: 5000
+      });
     } finally {
       setIsLoading(false);
     }
@@ -101,21 +115,34 @@ function CustomerAuth() {
     setFormError('');
   
     try {
-
       const response = await api.post('/users/login', loginData);
-
-      console.log('response.data', response.data);
 
       dispatch(setUser({
         email: response.data.email,
         role: response.data.role,
-        token: response.data.token,
+        name: response.data.name,
       }));
-      navigate('/');
+      
+      // Show success toast
+      toast.success("Login successful! Redirecting...", {
+        position: "top-right",
+        autoClose: 3000
+      });
+      
+      // Delay navigation slightly to allow toast to be seen
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
     }
     catch (error: any) {
       console.error("Login failed:", error);
       setFormError(error.response?.data?.message || "Invalid email or password. Please try again.");
+      
+      // Show error toast
+      toast.error(error.response?.data?.message || "Invalid email or password", {
+        position: "top-right",
+        autoClose: 5000
+      });
     } finally {
       setIsLoading(false);
     }
@@ -150,7 +177,8 @@ function CustomerAuth() {
         otp: otpValue
       });
       
-      // Close OTP modal
+      console.log('response',response);
+      
       setShowOtpModal(false);
       
       // Reset form data
@@ -160,12 +188,20 @@ function CustomerAuth() {
       // Switch to login form after successful signup
       setIsSignUp(false);
       
-      // Show success message (optional)
-      setFormError('');
-      
+      // Show success toast
+      toast.success("Account created successfully! Please login.", {
+        position: "top-right",
+        autoClose: 5000
+      });
     } catch (error: any) {
       console.error("OTP verification failed:", error);
       setOtpError(error.response?.data?.message || 'Invalid OTP. Please try again.');
+      
+      // Show error toast
+      toast.error(error.response?.data?.message || "Invalid verification code", {
+        position: "top-right",
+        autoClose: 5000
+      });
     } finally {
       setOtpLoading(false);
     }
@@ -185,9 +221,22 @@ function CustomerAuth() {
       });
       
       startResendCountdown();
+      
+      // Show toast notification
+      toast.info("New verification code sent to your email!", {
+        position: "top-right",
+        autoClose: 5000
+      });
     } catch (error: any) {
       console.error("Failed to resend OTP:", error);
       setOtpError("Failed to resend verification code. Please try again later.");
+      
+      // Show error toast
+      toast.error("Failed to resend verification code", {
+        position: "top-right",
+        autoClose: 5000
+      });
+      
       setResendDisabled(false);
     }
   };
@@ -201,6 +250,11 @@ function CustomerAuth() {
 
   const handleSocialAuth = (provider: string) => {
     console.log(`${provider} authentication clicked`);
+    // Show info toast
+    toast.info(`${provider} authentication initiated...`, {
+      position: "top-right",
+      autoClose: 3000
+    });
     // Implement OAuth logic
   };
 
@@ -220,6 +274,9 @@ function CustomerAuth() {
         />
         <div className="absolute inset-0 bg-black bg-opacity-40"></div>
       </div>
+
+      {/* Toast Container */}
+      <ToastContainer position="top-right" />
 
       {/* Main card */}
       <div className="relative z-10 bg-white rounded-2xl shadow-2xl w-full max-w-4xl mx-4 flex flex-col md:flex-row overflow-hidden">

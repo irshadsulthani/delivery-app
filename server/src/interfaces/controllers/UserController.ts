@@ -22,11 +22,10 @@ export class UserController {
     try {
       const useCase = new LoginUser(userRepo);
       const result = await useCase.execute(req.body.email, req.body.password);
-      res.cookie('token', result.token, {
+      res.cookie('accessToken', result.token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // true in production (https)
         sameSite: 'strict',
-        maxAge: 60 * 60 * 1000, // 1 hour
+        maxAge: 60 * 60 * 1000,
       });
       const { token, ...userData } = result;
       res.status(200).json(userData);
